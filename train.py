@@ -122,9 +122,14 @@ if __name__ == "__main__":
 
     """ Paths """
     dataset_path = "C:\\Users\\OMOLP094\\Desktop\\Galaxy-Type-Prediction-With-Vision-Transformer\\galaxy_type_dataset"
-    model_path = os.path.join("files", "ViT_model.h5")
-    csv_path = os.path.join("files", "log.csv")
+    model_path = os.path.join("files", "model","ViT_model.keras") # In the newer versions of Keras, the model saving format has changed, and it now expects the file path for model checkpoints to have a .keras extension instead of the older .h5 extension.
+    # print(model_path)
+    csv_path = os.path.join("files", "history", "log.csv")
+    # print(csv_path)
     # load_data(dataset_path) # For checking the splits
+    # Ensure that the directories exist
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
     """ Dataset """
     train_x, valid_x, test_x = load_data(dataset_path)
@@ -138,26 +143,26 @@ if __name__ == "__main__":
     # for x, y in train_ds:
     #     print(x.shape, y.shape) # (8, 64, 1875) - Batch size - 8, num of patches in an image = 64, patch shape = 25*25*3 = 1875, (8, 10) - Batch size - 8, num of classes = 10 (for every image - the label would be a one hot encoded vector containing 10 values with each value being 0 except 1 value for the class indexes to which the image doesn't belongs, the 1 value which is not zero will be 1 indicating the numerical label (class index) to which that particular image belongs
 
-    # """ Model """
-    # model = ViT(hp)
-    # model.compile(
-    #     loss="categorical_crossentropy",
-    #     optimizer=tf.keras.optimizers.Adam(hp["lr"], clipvalue=1.0),
-    #     metrics=["acc"]
-    # )
+    """ Model """
+    model = ViT(hp)
+    model.compile(
+        loss="categorical_crossentropy", # for Multiclass classification
+        optimizer=tf.keras.optimizers.Adam(hp["lr"], clipvalue=1.0),
+        metrics=["acc"] # Accuracy is the main metric
+    )
 
-    # callbacks = [
-    #     ModelCheckpoint(model_path, monitor='val_loss', verbose=1, save_best_only=True),
-    #     ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10, min_lr=1e-10, verbose=1),
-    #     CSVLogger(csv_path),
-    #     EarlyStopping(monitor='val_loss', patience=50, restore_best_weights=False),
-    # ]
+    callbacks = [
+        ModelCheckpoint(model_path, monitor='val_loss', verbose=1, save_best_only=True), # Saves the model weights when the validation loss starts reducing
+        ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10, min_lr=1e-10, verbose=1), # decreases learning rate when validation loss starts decreasing
+        CSVLogger(csv_path), # Saves the training logs
+        EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=False), # If the validation loss doesn't decreases for continuous 50 epoch, this will stop the training
+    ]
 
-    # model.fit(
-    #     train_ds,
-    #     epochs=hp["num_epochs"],
-    #     validation_data=valid_ds,
-    #     callbacks=callbacks
-    # )
+    model.fit(
+        train_ds,
+        epochs=hp["num_epochs"],
+        validation_data=valid_ds,
+        callbacks=callbacks
+    )
 
     ## ...

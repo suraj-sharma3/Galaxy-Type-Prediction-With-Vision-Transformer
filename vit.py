@@ -9,7 +9,7 @@ from tensorflow.keras.models import Model
 class ClassToken(Layer):
     def __init__(self):
         super().__init__()
-
+    # trainable / learnable class embedding
     def build(self, input_shape):
         w_init = tf.random_normal_initializer()
         self.w = tf.Variable(
@@ -33,7 +33,7 @@ def mlp(x, cf):
     return x
 
 def transformer_encoder(x, cf):
-    skip_1 = x
+    skip_1 = x # For skip connections
     x = LayerNormalization()(x)
     x = MultiHeadAttention(
         num_heads=cf["num_heads"], key_dim=cf["hidden_dim"]
@@ -50,30 +50,40 @@ def transformer_encoder(x, cf):
 def ViT(cf):
     """ Inputs """
     input_shape = (cf["num_patches"], cf["patch_size"]*cf["patch_size"]*cf["num_channels"])
-    inputs = Input(input_shape)     ## (None, 256, 3072)
-    print(inputs.shape)
+    inputs = Input(input_shape)     # (None, 64, 1875) (None - batch size, 64 - number of patches in an image and 1875 - patch width * patch height * patch channels)
+    # print(inputs.shape)
 
-    # """ Patch + Position Embeddings """
-    # patch_embed = Dense(cf["hidden_dim"])(inputs)   ## (None, 256, 768)
+    """ Patch Embeddings + Position Embeddings """
+    patch_embed = Dense(cf["hidden_dim"])(inputs)   ## (None, 256, 768)
+    # print(patch_embed.shape) # (None, 64, 768)
 
-    # positions = tf.range(start=0, limit=cf["num_patches"], delta=1)
-    # pos_embed = Embedding(input_dim=cf["num_patches"], output_dim=cf["hidden_dim"])(positions) ## (256, 768)
-    # embed = patch_embed + pos_embed ## (None, 256, 768)
+    positions = tf.range(start=0, limit=cf["num_patches"], delta=1) # delta is the step
+    # print(positions)
 
-    # """ Adding Class Token """
-    # token = ClassToken()(embed)
-    # x = Concatenate(axis=1)([token, embed]) ## (None, 257, 768)
+    pos_embed = Embedding(input_dim=cf["num_patches"], output_dim=cf["hidden_dim"])(positions) ## (256, 768)
+    # print(pos_embed.shape) ## (64, 768)
+    embed = patch_embed + pos_embed 
+    # print(embed.shape) ## (None, 64, 768)
 
-    # for _ in range(cf["num_layers"]):
-    #     x = transformer_encoder(x, cf)
+    """ Adding Class Token """
+    token = ClassToken()(embed)
+    x = Concatenate(axis=1)([token, embed]) ## (token - learnable class embedding & position embeddings of patches)
+    # print(x.shape) # (None, 65, 768) (none - batch size, 65 - position embeddings for the 64 patches + 1 trainable / learnable class embedding, 768 - flattened patch)
 
-    # """ Classification Head """
-    # x = LayerNormalization()(x)     ## (None, 257, 768)
-    # x = x[:, 0, :]
-    # x = Dense(cf["num_classes"], activation="softmax")(x)
+    for _ in range(cf["num_layers"]):
+        x = transformer_encoder(x, cf)
 
-    # model = Model(inputs, x)
-    # return model
+    # print(x.shape) # output of the transformer encoder block # (None, 65, 768)
+
+    """ Classification Head """
+    x = LayerNormalization()(x)     ## (None, 257, 768)
+    x = x[:, 0, :] 
+    # print(x.shape) # (None, 768) # Input for the classification layer
+    x = Dense(cf["num_classes"], activation="softmax")(x)
+    print(x.shape) # (None, 10) # Output for the classification layer
+
+    model = Model(inputs, x)
+    return model
 
 
 if __name__ == "__main__":
@@ -89,4 +99,4 @@ if __name__ == "__main__":
     config["num_classes"] = 10
 
     model = ViT(config)
-    # model.summary()
+    model.summary() # Prints the entire summary of the model in tabular form
